@@ -38,7 +38,7 @@ export interface LedgerRow {
 /** Fraction of 2027 the person is available for call, per §7.2 — runs from
  * first-eligible-for-call, not return-to-work (the 4-week exclusion is
  * unavailable time). 1.0 for anyone without a maternity return. */
-function availabilityFraction(firstEligibleDate: string | null): number {
+export function availabilityFraction(firstEligibleDate: string | null): number {
   if (!firstEligibleDate) return 1.0;
   if (firstEligibleDate <= YEAR_START) return 1.0;
   if (firstEligibleDate > YEAR_END) return 0.0;
