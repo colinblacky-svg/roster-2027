@@ -306,7 +306,18 @@ export function InteractiveCalendar({
             </div>
             <div className="grid grid-cols-1 gap-2 md:grid-cols-7">
               {weekDays.map((day) => (
-                <DayCell key={day.date} day={day} />
+                // Explicit column placement (1=Mon..7=Sun), only at the md+
+                // breakpoint where the grid actually has 7 columns — the
+                // first/last weeks in range are partial (2027 opens on a
+                // Friday), so placing by array order alone would misalign
+                // those days under the wrong weekday header.
+                <div
+                  key={day.date}
+                  className="md:[grid-column-start:var(--weekday-col)]"
+                  style={{ "--weekday-col": isoWeekday(day.date) + 1 } as React.CSSProperties}
+                >
+                  <DayCell day={day} />
+                </div>
               ))}
             </div>
           </div>
