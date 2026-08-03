@@ -9,6 +9,8 @@ import { InteractiveCalendar, type DayRow } from "@/components/InteractiveCalend
 export const dynamic = "force-dynamic";
 
 interface LeaveTag {
+  consultantId: string;
+  leaveType: string;
   abbrev: string;
   colorClass: string;
 }
@@ -71,6 +73,8 @@ export default async function CalendarPage() {
   const leaveByDate = new Map<string, LeaveTag[]>();
   for (const lr of activeLeave) {
     const tag: LeaveTag = {
+      consultantId: lr.consultantId,
+      leaveType: lr.leaveType,
       abbrev: lr.consultant.surname.slice(0, 3),
       colorClass: LEAVE_TAG_COLOR[lr.leaveType],
     };

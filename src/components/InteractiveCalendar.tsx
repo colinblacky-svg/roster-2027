@@ -14,7 +14,7 @@ export interface DayRow {
   first: { consultantId: string | null; surname: string; specialty: string } | null;
   second: { consultantId: string | null; surname: string; specialty: string } | null;
   alerts: string[];
-  onLeave: { abbrev: string; colorClass: string }[];
+  onLeave: { consultantId: string; leaveType: string; abbrev: string; colorClass: string }[];
 }
 
 interface ConsultantOption {
@@ -261,7 +261,7 @@ export function InteractiveCalendar({
     );
   }
 
-  function FilteredRow({ day, position }: { day: DayRow; position: Position }) {
+  function FilteredRow({ day, position }: { day: DayRow; position: Position | null }) {
     const [, month, dayNum] = day.date.split("-");
     const weekdayName = WEEKDAY_HEADERS[isoWeekday(day.date)];
     const hasAlert = day.alerts.length > 0;
@@ -293,7 +293,11 @@ export function InteractiveCalendar({
           <span className="font-medium text-violet-700 dark:text-violet-300">{day.holidayName}</span>
         )}
         <span className="min-w-[70px]">
-          <OnCallSlot day={day} position={position} label={position === "FIRST" ? "1st" : "2nd"} />
+          {position ? (
+            <OnCallSlot day={day} position={position} label={position === "FIRST" ? "1st" : "2nd"} />
+          ) : (
+            <span className="text-black/40 dark:text-white/40">On leave</span>
+          )}
         </span>
         {day.onLeave.length > 0 && (
           <div className="flex flex-wrap gap-1">
@@ -318,12 +322,18 @@ export function InteractiveCalendar({
   const filteredDays = filterId
     ? weekEntries
         .flatMap(([, weekDays]) => weekDays)
-        .map((day): { day: DayRow; position: Position } | null => {
+        .map((day): { day: DayRow; position: Position | null } | null => {
           if (day.first?.consultantId === filterId) return { day, position: "FIRST" };
           if (day.second?.consultantId === filterId) return { day, position: "SECOND" };
+          // No on-call slot that day — still include it if this is one of
+          // their own booked leave days (maternity excluded: it spans months
+          // at a time and would swamp the list, per the request that added
+          // this leave-in-filter behavior).
+          const onOwnLeave = day.onLeave.some((tag) => tag.consultantId === filterId && tag.leaveType !== "MATERNITY");
+          if (onOwnLeave) return { day, position: null };
           return null;
         })
-        .filter((x): x is { day: DayRow; position: Position } => x !== null)
+        .filter((x): x is { day: DayRow; position: Position | null } => x !== null)
         .sort((a, b) => a.day.date.localeCompare(b.day.date))
     : null;
 
@@ -356,7 +366,7 @@ export function InteractiveCalendar({
       {filteredDays ? (
         <div className="flex flex-col gap-2">
           <div className="text-xs text-black/50 dark:text-white/50">
-            {filteredDays.length} on-call day{filteredDays.length === 1 ? "" : "s"} for{" "}
+            {filteredDays.length} on-call/leave day{filteredDays.length === 1 ? "" : "s"} for{" "}
             {consultants.find((c) => c.id === filterId)?.surname}
           </div>
           {filteredDays.map(({ day, position }) => (
