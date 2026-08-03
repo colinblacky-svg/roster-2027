@@ -8,7 +8,25 @@ interface ConsultantOption {
   surname: string;
 }
 
-export function ResidualForm({ consultants }: { consultants: ConsultantOption[] }) {
+export function BalanceForm({
+  consultants,
+  title,
+  description,
+  fieldLabel,
+  submitLabel,
+  endpoint,
+  reconciledNoun,
+}: {
+  consultants: ConsultantOption[];
+  title: string;
+  description: string;
+  fieldLabel: string;
+  submitLabel: string;
+  endpoint: string;
+  /** e.g. "residual" or "lieu days" — slotted into "N prior 2027 request(s)
+   * reconciled to {reconciledNoun}." */
+  reconciledNoun: string;
+}) {
   const router = useRouter();
   const [consultantId, setConsultantId] = useState(consultants[0]?.id ?? "");
   const [amount, setAmount] = useState(0);
@@ -20,7 +38,7 @@ export function ResidualForm({ consultants }: { consultants: ConsultantOption[] 
     setSubmitting(true);
     setMessage(null);
     try {
-      const res = await fetch("/api/leave/residual", {
+      const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ consultantId, amount }),
@@ -28,8 +46,8 @@ export function ResidualForm({ consultants }: { consultants: ConsultantOption[] 
       const data = await res.json();
       setMessage(
         data.reconciled > 0
-          ? `Set. ${data.reconciled} prior 2027 request(s) reconciled to residual.`
-          : "Residual balance set."
+          ? `Set. ${data.reconciled} prior 2027 request(s) reconciled to ${reconciledNoun}.`
+          : "Balance set."
       );
       router.refresh();
     } catch {
@@ -41,12 +59,8 @@ export function ResidualForm({ consultants }: { consultants: ConsultantOption[] 
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-3 rounded-lg border border-black/10 p-4 dark:border-white/15">
-      <h2 className="text-sm font-semibold">2026 residual leave (§6.2)</h2>
-      <p className="text-xs text-black/50 dark:text-white/50">
-        Must be used before 10 Apr 2027 and takes priority over 2027 entitlement.
-        Setting this retroactively converts any pre-10-Apr 2027 leave already
-        booked back to residual.
-      </p>
+      <h2 className="text-sm font-semibold">{title}</h2>
+      <p className="text-xs text-black/50 dark:text-white/50">{description}</p>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         <label className="flex flex-col gap-1 text-xs">
           Consultant
@@ -63,7 +77,7 @@ export function ResidualForm({ consultants }: { consultants: ConsultantOption[] 
           </select>
         </label>
         <label className="flex flex-col gap-1 text-xs">
-          Residual days
+          {fieldLabel}
           <input
             type="number"
             min={0}
@@ -79,7 +93,7 @@ export function ResidualForm({ consultants }: { consultants: ConsultantOption[] 
         disabled={submitting}
         className="w-fit rounded-md bg-zinc-700 px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-zinc-800 disabled:opacity-50 dark:bg-zinc-600 dark:hover:bg-zinc-500"
       >
-        {submitting ? "Saving…" : "Set residual"}
+        {submitting ? "Saving…" : submitLabel}
       </button>
       {message && <p className="text-sm text-black/70 dark:text-white/70">{message}</p>}
     </form>

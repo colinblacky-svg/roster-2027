@@ -19,9 +19,18 @@ async function residualBalance(consultantId: string): Promise<number> {
   return txns.reduce((sum, t) => sum + t.amount, 0);
 }
 
-/** Charges the request's days to the right bucket (residual-first if any
- * remains and the leave starts before the deadline, §6.2) and runs the
- * on-call auto-swap for any assignments the leave now covers (§6.6).
+async function lieuBalance(consultantId: string): Promise<number> {
+  const txns = await prisma.leaveTransaction.findMany({
+    where: { consultantId, bucket: "LIEU" },
+  });
+  return txns.reduce((sum, t) => sum + t.amount, 0);
+}
+
+/** Charges the request's days to the right bucket and runs the on-call
+ * auto-swap for any assignments the leave now covers (§6.6). Bucket
+ * priority is residual first (if any remains and the leave starts before
+ * the deadline, §6.2), then lieu days for ANNUAL requests (no deadline —
+ * usable all year), then the 2027 entitlement.
  *
  * `groupId`/`startSeq` and `description` let the caller fold this into the
  * same undo group as the leave request's own CommandLogEntry (§9) — the
@@ -42,11 +51,15 @@ export async function finalizeLeaveApplication(
   if (request.leaveType === "ANNUAL" || request.leaveType === "STUDY") {
     const residual = await residualBalance(request.consultantId);
     const useResidual = residual > 0 && startDate < RESIDUAL_DEADLINE;
+    const useLieu = !useResidual && request.leaveType === "ANNUAL" && (await lieuBalance(request.consultantId)) > 0;
+
     const bucket = useResidual
       ? "RESIDUAL_2026"
-      : request.leaveType === "ANNUAL"
-        ? "ENTITLEMENT_2027_ANNUAL"
-        : "ENTITLEMENT_2027_STUDY";
+      : useLieu
+        ? "LIEU"
+        : request.leaveType === "ANNUAL"
+          ? "ENTITLEMENT_2027_ANNUAL"
+          : "ENTITLEMENT_2027_STUDY";
 
     await prisma.leaveTransaction.create({
       data: {
@@ -54,7 +67,7 @@ export async function finalizeLeaveApplication(
         leaveRequestId: request.id,
         bucket,
         amount: -request.daysCharged,
-        reason: useResidual ? "booked (drawn from 2026 residual)" : "booked",
+        reason: useResidual ? "booked (drawn from 2026 residual)" : useLieu ? "booked (drawn from lieu days)" : "booked",
       },
     });
   }
@@ -148,6 +161,72 @@ export async function setResidualAndReconcile(consultantId: string, amount: numb
         consultantId,
         leaveRequestId: req.id,
         bucket: "RESIDUAL_2026",
+        amount: -req.daysCharged,
+        reason: "reconciled from 2027 entitlement",
+      },
+    });
+    available -= req.daysCharged;
+    reconciled += 1;
+  }
+
+  return { reconciled };
+}
+
+/** Sets a consultant's lieu-day balance to `amount` and retrospectively
+ * reconciles: any ANNUAL leave already booked and charged to 2027 entitlement
+ * gets converted to draw from lieu days instead, up to however much is now
+ * available. Unlike residual, lieu days have no deadline (usable all year)
+ * and only ever apply to ANNUAL leave — requests already covered by residual
+ * are left alone, since residual outranks lieu. */
+export async function setLieuAndReconcile(consultantId: string, amount: number) {
+  const current = await lieuBalance(consultantId);
+  const delta = amount - current;
+  if (delta !== 0) {
+    await prisma.leaveTransaction.create({
+      data: {
+        consultantId,
+        bucket: "LIEU",
+        amount: delta,
+        reason: `lieu balance set to ${amount}`,
+      },
+    });
+  }
+
+  let available = await lieuBalance(consultantId);
+  if (available <= 0) return { reconciled: 0 };
+
+  const candidates = await prisma.leaveRequest.findMany({
+    where: {
+      consultantId,
+      leaveType: "ANNUAL",
+      status: { in: ["AUTO_APPLIED", "APPROVED"] },
+    },
+    orderBy: { startDate: "asc" },
+  });
+
+  let reconciled = 0;
+  for (const req of candidates) {
+    if (available <= 0) break;
+    const existing = await prisma.leaveTransaction.findFirst({
+      where: { leaveRequestId: req.id, bucket: "ENTITLEMENT_2027_ANNUAL", amount: { lt: 0 } },
+    });
+    if (!existing) continue; // already on residual or lieu, or not charged to entitlement at all
+    if (available < req.daysCharged) continue; // not enough lieu to cover this one yet
+
+    await prisma.leaveTransaction.create({
+      data: {
+        consultantId,
+        leaveRequestId: req.id,
+        bucket: "ENTITLEMENT_2027_ANNUAL",
+        amount: req.daysCharged,
+        reason: "reconciled to lieu days",
+      },
+    });
+    await prisma.leaveTransaction.create({
+      data: {
+        consultantId,
+        leaveRequestId: req.id,
+        bucket: "LIEU",
         amount: -req.daysCharged,
         reason: "reconciled from 2027 entitlement",
       },

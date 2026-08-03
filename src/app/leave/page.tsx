@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { computeLeaveBalances } from "@/lib/leave-balance";
 import { LeaveRequestForm } from "@/components/LeaveRequestForm";
-import { ResidualForm } from "@/components/ResidualForm";
+import { BalanceForm } from "@/components/BalanceForm";
 import { LeaveDecisionButtons } from "@/components/LeaveDecisionButtons";
 import { UndoButton } from "@/components/UndoButton";
 
@@ -54,7 +54,26 @@ export default async function LeavePage() {
 
       <div className="grid gap-4 md:grid-cols-2">
         <LeaveRequestForm consultants={consultants} />
-        <ResidualForm consultants={consultants} />
+        <div className="flex flex-col gap-4">
+          <BalanceForm
+            consultants={consultants}
+            title="2026 residual leave (§6.2)"
+            description="Must be used before 10 Apr 2027 and takes priority over 2027 entitlement and lieu days. Setting this retroactively converts any pre-10-Apr 2027 leave already booked back to residual."
+            fieldLabel="Residual days"
+            submitLabel="Set residual"
+            endpoint="/api/leave/residual"
+            reconciledNoun="residual"
+          />
+          <BalanceForm
+            consultants={consultants}
+            title="Lieu days"
+            description="Usable any time in 2027, applied to annual leave after residual but before 2027 entitlement. Setting this retroactively converts any annual leave already booked from 2027 entitlement to lieu days."
+            fieldLabel="Lieu days"
+            submitLabel="Set lieu balance"
+            endpoint="/api/leave/lieu"
+            reconciledNoun="lieu days"
+          />
+        </div>
       </div>
 
       <section className="flex flex-col gap-3">
@@ -62,13 +81,15 @@ export default async function LeavePage() {
           Balances
         </h2>
         <div className="overflow-x-auto rounded-lg border border-black/10 dark:border-white/15">
-          <table className="w-full min-w-[700px] border-collapse text-sm">
+          <table className="w-full min-w-[850px] border-collapse text-sm">
             <thead>
               <tr className="border-b border-black/10 bg-black/[.02] text-left dark:border-white/15 dark:bg-white/[.03]">
                 <th className="px-3 py-2 font-medium">Name</th>
                 <th className="px-3 py-2 text-right font-medium">Annual used/cap</th>
                 <th className="px-3 py-2 text-right font-medium">Study used/cap</th>
                 <th className="px-3 py-2 text-right font-medium">Residual balance</th>
+                <th className="px-3 py-2 text-right font-medium">Residual used</th>
+                <th className="px-3 py-2 text-right font-medium">Lieu balance</th>
               </tr>
             </thead>
             <tbody>
@@ -82,6 +103,8 @@ export default async function LeavePage() {
                     {b.studyUsed} / {b.studyCap}
                   </td>
                   <td className="px-3 py-2 text-right tabular-nums">{b.residualBalance}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">{b.residualUsed}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">{b.lieuBalance}</td>
                 </tr>
               ))}
             </tbody>

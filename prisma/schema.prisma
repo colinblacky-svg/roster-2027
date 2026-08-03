@@ -74,6 +74,7 @@ enum LeaveStatus {
 
 enum LeaveBucket {
   RESIDUAL_2026
+  LIEU
   ENTITLEMENT_2027_ANNUAL
   ENTITLEMENT_2027_STUDY
 }
