@@ -48,13 +48,12 @@ export function InteractiveCalendar({
   consultants: ConsultantOption[];
 }) {
   const router = useRouter();
-  const [selected, setSelected] = useState<SlotKey | null>(null);
   const [picking, setPicking] = useState<SlotKey | null>(null);
   const [busy, setBusy] = useState(false);
   const [filterId, setFilterId] = useState("");
 
   async function sendCommand(
-    commandType: "ASSIGN_SLOT" | "CLEAR_SLOT" | "MOVE_ASSIGNMENT" | "SWAP_ASSIGNMENTS",
+    commandType: "ASSIGN_SLOT" | "CLEAR_SLOT",
     mutations: { date: ISODate; position: Position; toConsultantId: string | null }[],
     description: string
   ) {
@@ -68,62 +67,7 @@ export function InteractiveCalendar({
       router.refresh();
     } finally {
       setBusy(false);
-      setSelected(null);
       setPicking(null);
-    }
-  }
-
-  function personAt(days: [ISODate, DayRow[]][], key: SlotKey) {
-    for (const [, weekDays] of days) {
-      const day = weekDays.find((d) => d.date === key.date);
-      if (day) return key.position === "FIRST" ? day.first : day.second;
-    }
-    return null;
-  }
-
-  function handleSlotClick(key: SlotKey, occupied: boolean) {
-    if (busy) return;
-
-    if (picking && slotKeyEq(picking, key)) {
-      setPicking(null);
-      return;
-    }
-
-    if (!selected) {
-      if (occupied) {
-        setSelected(key);
-      } else {
-        setPicking(key);
-      }
-      return;
-    }
-
-    if (slotKeyEq(selected, key)) {
-      setSelected(null);
-      return;
-    }
-
-    const fromPerson = personAt(weekEntries, selected);
-    if (!occupied) {
-      // Move: clear the source, assign the destination.
-      void sendCommand(
-        "MOVE_ASSIGNMENT",
-        [
-          { date: selected.date, position: selected.position, toConsultantId: null },
-          { date: key.date, position: key.position, toConsultantId: fromPerson?.consultantId ?? null },
-        ],
-        `Moved ${fromPerson?.surname ?? "?"} from ${selected.date} to ${key.date}`
-      );
-    } else {
-      const toPerson = personAt(weekEntries, key);
-      void sendCommand(
-        "SWAP_ASSIGNMENTS",
-        [
-          { date: selected.date, position: selected.position, toConsultantId: toPerson?.consultantId ?? null },
-          { date: key.date, position: key.position, toConsultantId: fromPerson?.consultantId ?? null },
-        ],
-        `Swapped ${fromPerson?.surname ?? "?"} ↔ ${toPerson?.surname ?? "?"}`
-      );
     }
   }
 
@@ -147,7 +91,6 @@ export function InteractiveCalendar({
   function OnCallSlot({ day, position, label }: { day: DayRow; position: Position; label: string }) {
     const person = position === "FIRST" ? day.first : day.second;
     const key: SlotKey = { date: day.date, position };
-    const isSelected = slotKeyEq(selected, key);
     const isPicking = slotKeyEq(picking, key);
 
     if (isPicking) {
@@ -156,9 +99,11 @@ export function InteractiveCalendar({
           <span className="text-black/40 dark:text-white/40">{label}:</span>
           <select
             autoFocus
-            defaultValue=""
+            defaultValue={person?.consultantId ?? ""}
             onChange={(e) => {
-              if (e.target.value) handleAssign(key, e.target.value);
+              if (e.target.value === "__clear__") handleClear(key);
+              else if (e.target.value) handleAssign(key, e.target.value);
+              else setPicking(null);
             }}
             onBlur={() => setPicking(null)}
             className="rounded border border-blue-400 bg-white px-1 py-0.5 text-[11px] dark:bg-zinc-900"
@@ -166,6 +111,7 @@ export function InteractiveCalendar({
             <option value="" disabled>
               choose…
             </option>
+            {person && <option value="__clear__">— remove —</option>}
             {consultants.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.surname}
@@ -180,14 +126,9 @@ export function InteractiveCalendar({
       <button
         type="button"
         disabled={busy}
-        onClick={() => handleSlotClick(key, Boolean(person))}
-        onDoubleClick={() => person && handleClear(key)}
-        title={person ? "Click to select for swap/move; double-click to clear" : "Click to assign"}
-        className={`flex w-full items-center gap-1 rounded px-0.5 text-left transition-colors ${
-          isSelected
-            ? "bg-blue-100 ring-1 ring-blue-500 dark:bg-blue-900/50"
-            : "hover:bg-black/5 dark:hover:bg-white/10"
-        }`}
+        onClick={() => setPicking(key)}
+        title={person ? "Click to change or remove" : "Click to assign"}
+        className="flex w-full items-center gap-1 rounded px-0.5 text-left transition-colors hover:bg-black/5 dark:hover:bg-white/10"
       >
         <span className="text-black/40 dark:text-white/40">{label}:</span>
         {person ? (
@@ -349,18 +290,6 @@ export function InteractiveCalendar({
           </button>
         )}
       </div>
-
-      {selected && (
-        <div className="sticky top-0 z-20 flex items-center gap-2 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white shadow">
-          <span>
-            Selected {selected.date} ({selected.position === "FIRST" ? "1st" : "2nd"}). Click another slot to swap
-            or move, or click it again to cancel.
-          </span>
-          <button onClick={() => setSelected(null)} className="ml-auto underline">
-            Cancel
-          </button>
-        </div>
-      )}
 
       {filteredDays ? (
         <div className="flex flex-col gap-2">

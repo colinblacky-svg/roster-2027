@@ -140,9 +140,7 @@ export default async function CalendarPage() {
           <h1 className="text-xl font-semibold">Calendar</h1>
           <p className="mt-1 text-sm text-black/60 dark:text-white/60">
             2027 on-call roster. Week labels (A/B) determine who is available
-            each week (§3.1). Click a slot to select it, then click another to
-            swap or move; click an empty slot to assign; double-click to
-            clear.
+            each week (§3.1). Click a name to change or remove it directly.
           </p>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
