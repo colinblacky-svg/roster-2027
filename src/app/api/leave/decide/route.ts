@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { finalizeLeaveApplication } from "@/lib/leave-apply";
@@ -20,6 +21,9 @@ export async function POST(request: Request) {
     where: { id: leaveRequestId },
     data: { status: "APPROVED", decidedAt: new Date() },
   });
-  const result = await finalizeLeaveApplication(leaveRequestId);
+  // Undo here only covers the auto-swap this triggers (restoring the
+  // original on-call assignments) — reverting the approval decision itself
+  // isn't wired up, same as reject.
+  const result = await finalizeLeaveApplication(leaveRequestId, randomUUID(), 1, `Approved leave request ${leaveRequestId}`);
   return NextResponse.json({ status: "APPROVED", ...result });
 }

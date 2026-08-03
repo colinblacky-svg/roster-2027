@@ -3,6 +3,7 @@ import { computeLeaveBalances } from "@/lib/leave-balance";
 import { LeaveRequestForm } from "@/components/LeaveRequestForm";
 import { ResidualForm } from "@/components/ResidualForm";
 import { LeaveDecisionButtons } from "@/components/LeaveDecisionButtons";
+import { UndoButton } from "@/components/UndoButton";
 
 export const dynamic = "force-dynamic";
 
@@ -40,12 +41,15 @@ export default async function LeavePage() {
 
   return (
     <div className="flex flex-col gap-8">
-      <div>
-        <h1 className="text-xl font-semibold">Leave</h1>
-        <p className="mt-1 text-sm text-black/60 dark:text-white/60">
-          Leave requests, balances, and the 6-person cap (§6). Covers all 29
-          consultants, including the three with no on-call duty.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-semibold">Leave</h1>
+          <p className="mt-1 text-sm text-black/60 dark:text-white/60">
+            Leave requests, balances, and the 6-person cap (§6). Covers all 29
+            consultants, including the three with no on-call duty.
+          </p>
+        </div>
+        <UndoButton />
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">

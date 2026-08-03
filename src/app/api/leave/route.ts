@@ -1,7 +1,9 @@
+import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { loadRosterState } from "@/lib/roster-state";
 import { finalizeLeaveApplication } from "@/lib/leave-apply";
+import { logCommand } from "@/lib/commands";
 import { chargeDaysFor } from "@/lib/roster-engine/leave-engine";
 import { eachDay, type ISODate } from "@/lib/roster-engine/date-utils";
 
@@ -28,15 +30,20 @@ export async function POST(request: Request) {
         startDate: { lte: new Date(endDate) },
         endDate: { gte: new Date(startDate) },
       },
+      include: { consultant: true },
     });
-    for (const req of existing) {
+    const groupId = randomUUID();
+    for (let i = 0; i < existing.length; i++) {
+      const req = existing[i];
+      const previousStatus = req.status;
       await prisma.leaveRequest.update({
         where: { id: req.id },
         data: { status: "CANCELLED", decidedAt: new Date() },
       });
       const txns = await prisma.leaveTransaction.findMany({ where: { leaveRequestId: req.id } });
+      const reversalTransactionIds: string[] = [];
       for (const t of txns) {
-        await prisma.leaveTransaction.create({
+        const reversal = await prisma.leaveTransaction.create({
           data: {
             consultantId,
             leaveRequestId: req.id,
@@ -45,7 +52,16 @@ export async function POST(request: Request) {
             reason: `reversal of: ${t.reason}`,
           },
         });
+        reversalTransactionIds.push(reversal.id);
       }
+      await logCommand(
+        groupId,
+        i + 1,
+        "CANCEL_LEAVE_REQUEST",
+        { leaveRequestId: req.id, status: "CANCELLED" },
+        { leaveRequestId: req.id, previousStatus, reversalTransactionIds },
+        `Cancelled ${leaveType} leave for ${req.consultant.surname} (${toISO(req.startDate)} → ${toISO(req.endDate)})`
+      );
     }
     return NextResponse.json({ cancelled: existing.length });
   }
@@ -91,9 +107,20 @@ export async function POST(request: Request) {
     },
   });
 
+  const groupId = randomUUID();
+  const description = `Booked ${leaveType} leave for ${consultantData.surname} (${startDate} → ${endDate})`;
+  await logCommand(
+    groupId,
+    1,
+    "APPLY_LEAVE_REQUEST",
+    { leaveRequestId: leaveRequest.id },
+    { leaveRequestId: leaveRequest.id },
+    description
+  );
+
   let swapCount = 0;
   if (status === "AUTO_APPLIED") {
-    const result = await finalizeLeaveApplication(leaveRequest.id);
+    const result = await finalizeLeaveApplication(leaveRequest.id, groupId, 2, description);
     swapCount = result.swapCount;
   }
 

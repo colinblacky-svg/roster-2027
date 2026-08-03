@@ -6,6 +6,7 @@ import { prisma } from "./prisma";
 import { loadRosterState } from "./roster-state";
 import { computeAutoSwapPlan } from "./roster-engine/leave-swap";
 import { RESIDUAL_DEADLINE } from "./roster-engine/leave-engine";
+import { logCommand } from "./commands";
 
 function toISO(d: Date): string {
   return d.toISOString().slice(0, 10);
@@ -20,8 +21,20 @@ async function residualBalance(consultantId: string): Promise<number> {
 
 /** Charges the request's days to the right bucket (residual-first if any
  * remains and the leave starts before the deadline, §6.2) and runs the
- * on-call auto-swap for any assignments the leave now covers (§6.6). */
-export async function finalizeLeaveApplication(leaveRequestId: string) {
+ * on-call auto-swap for any assignments the leave now covers (§6.6).
+ *
+ * `groupId`/`startSeq` and `description` let the caller fold this into the
+ * same undo group as the leave request's own CommandLogEntry (§9) — the
+ * charge is covered for free by APPLY_LEAVE_REQUEST's inverse (it deletes
+ * every LeaveTransaction tied to the request), but each auto-swapped
+ * Assignment needs its own AUTO_SWAP_FOR_LEAVE entry so undo can restore the
+ * original consultant. */
+export async function finalizeLeaveApplication(
+  leaveRequestId: string,
+  groupId: string,
+  startSeq: number,
+  description: string
+) {
   const request = await prisma.leaveRequest.findUniqueOrThrow({ where: { id: leaveRequestId } });
   const startDate = toISO(request.startDate);
   const endDate = toISO(request.endDate);
@@ -49,12 +62,27 @@ export async function finalizeLeaveApplication(leaveRequestId: string) {
   const state = await loadRosterState();
   const mutations = computeAutoSwapPlan(state, request.consultantId, startDate, endDate);
   const dutyReassignments = new Map<string, string>(); // dutyId -> new consultantId
+  let seq = startSeq;
   for (const m of mutations) {
+    const existing = await prisma.assignment.findUnique({
+      where: { date_position: { date: new Date(m.date), position: m.position } },
+    });
+    const fromConsultantId = existing?.consultantId ?? null;
+
     await prisma.assignment.update({
       where: { date_position: { date: new Date(m.date), position: m.position } },
       data: { consultantId: m.newConsultantId, source: "SWAP" },
     });
     if (m.weekendDutyId) dutyReassignments.set(m.weekendDutyId, m.newConsultantId);
+
+    await logCommand(
+      groupId,
+      seq++,
+      "AUTO_SWAP_FOR_LEAVE",
+      { date: m.date, position: m.position, consultantId: m.newConsultantId, weekendDutyId: m.weekendDutyId },
+      { date: m.date, position: m.position, consultantId: fromConsultantId, weekendDutyId: m.weekendDutyId },
+      description
+    );
   }
   // Keep WeekendDuty.consultantId in sync — the ledger and validation key off
   // the duty record, not the individual Assignment rows, for weekend/BH work.
