@@ -40,6 +40,13 @@ function slotKeyEq(a: SlotKey | null, b: SlotKey): boolean {
   return !!a && a.date === b.date && a.position === b.position;
 }
 
+interface DragPayload extends SlotKey {
+  consultantId: string;
+  surname: string;
+}
+
+const DRAG_MIME = "application/x-roster-slot";
+
 export function InteractiveCalendar({
   weekEntries,
   consultants,
@@ -51,9 +58,10 @@ export function InteractiveCalendar({
   const [picking, setPicking] = useState<SlotKey | null>(null);
   const [busy, setBusy] = useState(false);
   const [filterId, setFilterId] = useState("");
+  const [dragOverKey, setDragOverKey] = useState<SlotKey | null>(null);
 
   async function sendCommand(
-    commandType: "ASSIGN_SLOT" | "CLEAR_SLOT",
+    commandType: "ASSIGN_SLOT" | "CLEAR_SLOT" | "MOVE_ASSIGNMENT" | "SWAP_ASSIGNMENTS",
     mutations: { date: ISODate; position: Position; toConsultantId: string | null }[],
     description: string
   ) {
@@ -86,6 +94,30 @@ export function InteractiveCalendar({
       [{ date: key.date, position: key.position, toConsultantId: null }],
       `Cleared ${key.date} (${key.position === "FIRST" ? "1st" : "2nd"})`
     );
+  }
+
+  function handleDrop(source: DragPayload, target: SlotKey, targetPerson: { consultantId: string | null; surname: string } | null) {
+    if (slotKeyEq(target, source)) return;
+
+    if (targetPerson?.consultantId) {
+      void sendCommand(
+        "SWAP_ASSIGNMENTS",
+        [
+          { date: source.date, position: source.position, toConsultantId: targetPerson.consultantId },
+          { date: target.date, position: target.position, toConsultantId: source.consultantId },
+        ],
+        `Swapped ${source.surname} ↔ ${targetPerson.surname}`
+      );
+    } else {
+      void sendCommand(
+        "MOVE_ASSIGNMENT",
+        [
+          { date: source.date, position: source.position, toConsultantId: null },
+          { date: target.date, position: target.position, toConsultantId: source.consultantId },
+        ],
+        `Moved ${source.surname} from ${source.date} to ${target.date}`
+      );
+    }
   }
 
   function OnCallSlot({ day, position, label }: { day: DayRow; position: Position; label: string }) {
@@ -122,13 +154,43 @@ export function InteractiveCalendar({
       );
     }
 
+    const isDragOver = slotKeyEq(dragOverKey, key);
+
     return (
       <button
         type="button"
         disabled={busy}
         onClick={() => setPicking(key)}
-        title={person ? "Click to change or remove" : "Click to assign"}
-        className="flex w-full items-center gap-1 rounded px-0.5 text-left transition-colors hover:bg-black/5 dark:hover:bg-white/10"
+        draggable={Boolean(person)}
+        onDragStart={(e) => {
+          if (!person?.consultantId) return;
+          const payload: DragPayload = { ...key, consultantId: person.consultantId, surname: person.surname };
+          e.dataTransfer.setData(DRAG_MIME, JSON.stringify(payload));
+          e.dataTransfer.effectAllowed = "move";
+        }}
+        onDragOver={(e) => {
+          if (!e.dataTransfer.types.includes(DRAG_MIME)) return;
+          e.preventDefault();
+          e.dataTransfer.dropEffect = "move";
+          if (!isDragOver) setDragOverKey(key);
+        }}
+        onDragLeave={() => {
+          if (isDragOver) setDragOverKey(null);
+        }}
+        onDrop={(e) => {
+          e.preventDefault();
+          setDragOverKey(null);
+          const raw = e.dataTransfer.getData(DRAG_MIME);
+          if (!raw) return;
+          const source = JSON.parse(raw) as DragPayload;
+          handleDrop(source, key, person);
+        }}
+        title={person ? "Click to change or remove; drag onto another slot to swap or move" : "Click to assign, or drop a name here"}
+        className={`flex w-full items-center gap-1 rounded px-0.5 text-left transition-colors ${
+          isDragOver
+            ? "bg-blue-100 ring-1 ring-blue-500 dark:bg-blue-900/50"
+            : "hover:bg-black/5 dark:hover:bg-white/10"
+        } ${person ? "cursor-grab active:cursor-grabbing" : ""}`}
       >
         <span className="text-black/40 dark:text-white/40">{label}:</span>
         {person ? (

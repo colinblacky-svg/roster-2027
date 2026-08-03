@@ -33,6 +33,12 @@ export interface LedgerRow {
   count212: number;
   variance: number;
   materialVariance: boolean;
+  /** Literal count of individual calendar days on call — a Fri-Sat-Sun
+   * ordinary weekend duty counts as 3, a BH leg as 2 — as opposed to
+   * actualTotal, which uses the §7.2 fractional weighting instead. Since
+   * every Assignment row is exactly one (date, position) for one
+   * consultant, this is simply the count of that person's Assignment rows. */
+  totalCallDays: number;
 }
 
 /** Fraction of 2027 the person is available for call, per §7.2 — runs from
@@ -118,6 +124,7 @@ export function computeLedger(state: RosterState): LedgerRow[] {
         count212,
         variance,
         materialVariance: Math.abs(variance) >= MATERIALITY_THRESHOLD,
+        totalCallDays: calls.length,
       } satisfies LedgerRow;
     })
     .sort((a, b) => a.surname.localeCompare(b.surname));

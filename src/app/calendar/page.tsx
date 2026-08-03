@@ -144,7 +144,6 @@ export default async function CalendarPage() {
           </p>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
-          <GenerateButton />
           <UndoButton />
         </div>
       </div>
@@ -173,6 +172,13 @@ export default async function CalendarPage() {
           </ul>
         </details>
       )}
+
+      <div className="mt-4 flex flex-col items-start gap-2 border-t border-black/10 pt-6 dark:border-white/15">
+        <p className="text-sm text-black/60 dark:text-white/60">
+          Regenerating replaces the entire year&apos;s roster from scratch (undoable as one step).
+        </p>
+        <GenerateButton />
+      </div>
     </div>
   );
 }

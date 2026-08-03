@@ -43,6 +43,7 @@ export default async function LedgerPage() {
               <th className="px-3 py-2 text-right font-medium">121</th>
               <th className="px-3 py-2 text-right font-medium">212</th>
               <th className="px-3 py-2 text-right font-medium">Variance</th>
+              <th className="px-3 py-2 text-right font-medium">Total calls</th>
             </tr>
           </thead>
           <tbody>
@@ -86,6 +87,7 @@ export default async function LedgerPage() {
                   {r.variance > 0 ? "+" : ""}
                   {fmt(r.variance)}
                 </td>
+                <td className="px-3 py-2 text-right tabular-nums font-medium">{r.totalCallDays}</td>
               </tr>
             ))}
           </tbody>
