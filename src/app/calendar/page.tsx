@@ -26,6 +26,28 @@ const LEAVE_TAG_COLOR: Record<string, string> = {
   MEDICAL: "bg-orange-100 text-orange-800 dark:bg-orange-900/50 dark:text-orange-300",
 };
 
+const LEAVE_TYPE_LABELS: [type: string, label: string][] = [
+  ["ANNUAL", "Annual"],
+  ["STUDY", "Study"],
+  ["PARENTAL", "Parental"],
+  ["MATERNITY", "Maternity"],
+  ["MEDICAL", "Medical"],
+];
+
+function LeaveLegend() {
+  return (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-black/60 dark:text-white/60">
+      <span className="font-medium text-black/40 dark:text-white/40">Leave:</span>
+      {LEAVE_TYPE_LABELS.map(([type, label]) => (
+        <span key={type} className="flex items-center gap-1.5">
+          <span className={`rounded px-1 text-[10px] font-medium ${LEAVE_TAG_COLOR[type]}`}>ABC</span>
+          {label}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 function fmtWhen(d: Date): string {
   return d.toLocaleString("en-IE", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 }
@@ -128,6 +150,8 @@ export default async function CalendarPage() {
           <UndoButton />
         </div>
       </div>
+
+      <LeaveLegend />
 
       <InteractiveCalendar weekEntries={weekEntries} consultants={onCallConsultants} />
 
