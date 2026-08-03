@@ -1,0 +1,14 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "roster-dev",
+      "runtimeExecutable": "/opt/homebrew/Cellar/node/26.5.1/bin/node",
+      "runtimeArgs": ["/opt/homebrew/lib/node_modules/npm/bin/npm-cli.js", "run", "dev"],
+      "port": 3000,
+      "env": {
+        "PATH": "/opt/homebrew/bin:/opt/homebrew/Cellar/node/26.5.1/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+      }
+    }
+  ]
+}

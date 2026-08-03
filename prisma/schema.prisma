@@ -1,0 +1,248 @@
+// 2027 Anaesthesiology On-Call Roster — data model.
+// See /Users/colinblack/.claude/plans/concurrent-squishing-whale.md for the design rationale.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+enum Specialty {
+  CARDIAC
+  GENERAL
+  NONE
+}
+
+enum Weekday {
+  MON
+  TUE
+  WED
+  THU
+}
+
+enum WeekLabel {
+  A
+  B
+}
+
+enum Position {
+  FIRST
+  SECOND
+}
+
+enum AssignmentSource {
+  GENERATED
+  MANUAL
+  SWAP
+  HAND_ASSIGNED
+}
+
+enum WeekendPattern {
+  ORD_121
+  ORD_212
+  BH_A
+  BH_B
+  BH_C
+  BH_D
+  MANUAL_SAT_ONLY
+  MANUAL_SUN_ONLY
+}
+
+enum LeaveType {
+  ANNUAL
+  STUDY
+  PARENTAL
+  MATERNITY
+  MEDICAL
+}
+
+enum BookingOrCancelling {
+  BOOK
+  CANCEL
+}
+
+enum LeaveStatus {
+  AUTO_APPLIED
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum LeaveBucket {
+  RESIDUAL_2026
+  ENTITLEMENT_2027_ANNUAL
+  ENTITLEMENT_2027_STUDY
+}
+
+enum CommandType {
+  ASSIGN_SLOT
+  CLEAR_SLOT
+  MOVE_ASSIGNMENT
+  SWAP_ASSIGNMENTS
+  APPLY_LEAVE_REQUEST
+  CANCEL_LEAVE_REQUEST
+  AUTO_SWAP_FOR_LEAVE
+  GENERATE_ROSTER
+  RECONCILE_RESIDUAL
+}
+
+model Consultant {
+  id         String    @id @default(cuid())
+  surname    String    @unique
+  firstName  String?
+  specialty  Specialty
+  // Governs the roster only (0.0 for Mannion/McGinley/O'Hare). Leave entitlement
+  // uses employmentFraction instead — the two are deliberately independent (§6.1).
+  callProportion     Float
+  employmentFraction Float
+
+  // Week A / Week B working pattern, Mon-Fri, true = IN.
+  weekAMon Boolean
+  weekATue Boolean
+  weekAWed Boolean
+  weekAThu Boolean
+  weekAFri Boolean
+  weekBMon Boolean
+  weekBTue Boolean
+  weekBWed Boolean
+  weekBThu Boolean
+  weekBFri Boolean
+
+  preferredDay Weekday?
+  // JSON-encoded string[] of Weekday — usually one day, Kelecsenyi has two (§2.1).
+  secondaryDays String @default("[]")
+
+  standingNotes String?
+
+  // Maternity return ramp (§2.2). Null for consultants with no maternity return.
+  returnToWorkDate  DateTime?
+  firstEligibleDate DateTime?
+  secondOnCallsCompletedSinceReturn Int     @default(0)
+  rampComplete                      Boolean @default(true)
+
+  // Explicit, admin-visible resolution of §10.1 (set true for Holt and Murphy).
+  excludeFromBankHoliday Boolean @default(false)
+
+  assignments       Assignment[]
+  weekendDuties     WeekendDuty[]
+  leaveRequests     LeaveRequest[]
+  leaveTransactions LeaveTransaction[]
+
+  @@map("consultants")
+}
+
+model BankHolidayBlock {
+  id       String   @id @default(cuid())
+  name     String
+  friday   DateTime
+  saturday DateTime
+  sunday   DateTime
+  monday   DateTime
+
+  calendarDays CalendarDay[]
+
+  @@map("bank_holiday_blocks")
+}
+
+model CalendarDay {
+  date             DateTime @id
+  weekLabel        WeekLabel
+  isPublicHoliday  Boolean  @default(false)
+  holidayName      String?
+  inGeneratorScope Boolean  @default(true)
+
+  bankHolidayBlockId String?
+  bankHolidayBlock    BankHolidayBlock? @relation(fields: [bankHolidayBlockId], references: [id])
+
+  assignments Assignment[]
+
+  @@map("calendar_days")
+}
+
+model Assignment {
+  id       String   @id @default(cuid())
+  date     DateTime
+  calendarDay CalendarDay @relation(fields: [date], references: [date])
+  position Position
+
+  consultantId String?
+  consultant   Consultant? @relation(fields: [consultantId], references: [id])
+
+  weekendDutyId String?
+  weekendDuty   WeekendDuty? @relation(fields: [weekendDutyId], references: [id])
+
+  source  AssignmentSource @default(MANUAL)
+  version Int              @default(1)
+
+  @@unique([date, position])
+  @@map("assignments")
+}
+
+model WeekendDuty {
+  id               String         @id @default(cuid())
+  pattern          WeekendPattern
+  fraction         Float
+  cohortWeekLabel  WeekLabel
+
+  consultantId String
+  consultant   Consultant @relation(fields: [consultantId], references: [id])
+
+  assignments Assignment[]
+
+  @@map("weekend_duties")
+}
+
+model LeaveRequest {
+  id                  String              @id @default(cuid())
+  consultantId        String
+  consultant          Consultant          @relation(fields: [consultantId], references: [id])
+  startDate           DateTime
+  endDate             DateTime
+  leaveType           LeaveType
+  bookingOrCancelling BookingOrCancelling
+  status              LeaveStatus
+  daysCharged         Float
+
+  createdAt DateTime  @default(now())
+  decidedAt DateTime?
+  decidedBy String?
+
+  leaveTransactions LeaveTransaction[]
+
+  @@map("leave_requests")
+}
+
+model LeaveTransaction {
+  id             String       @id @default(cuid())
+  consultantId   String
+  consultant     Consultant   @relation(fields: [consultantId], references: [id])
+  leaveRequestId String?
+  leaveRequest   LeaveRequest? @relation(fields: [leaveRequestId], references: [id])
+  bucket         LeaveBucket
+  amount         Float
+  reason         String
+  createdAt      DateTime     @default(now())
+
+  @@map("leave_transactions")
+}
+
+model CommandLogEntry {
+  id              String      @id @default(cuid())
+  groupId         String
+  sequenceInGroup Int
+  commandType     CommandType
+  forwardPayload  String
+  inversePayload  String
+  description     String
+  actorId         String?
+  appliedAt       DateTime    @default(now())
+  undoneAt        DateTime?
+  rosterVersionAfter Int?
+
+  @@index([groupId])
+  @@map("command_log_entries")
+}
