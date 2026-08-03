@@ -51,6 +51,7 @@ export function InteractiveCalendar({
   const [selected, setSelected] = useState<SlotKey | null>(null);
   const [picking, setPicking] = useState<SlotKey | null>(null);
   const [busy, setBusy] = useState(false);
+  const [filterId, setFilterId] = useState("");
 
   async function sendCommand(
     commandType: "ASSIGN_SLOT" | "CLEAR_SLOT" | "MOVE_ASSIGNMENT" | "SWAP_ASSIGNMENTS",
@@ -257,10 +258,98 @@ export function InteractiveCalendar({
     );
   }
 
+  function FilteredRow({ day, position }: { day: DayRow; position: Position }) {
+    const [, month, dayNum] = day.date.split("-");
+    const weekdayName = WEEKDAY_HEADERS[isoWeekday(day.date)];
+    const hasAlert = day.alerts.length > 0;
+
+    return (
+      <div
+        title={day.alerts.join("\n")}
+        className={`flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border px-3 py-2 text-xs ${
+          hasAlert
+            ? "border-red-400 bg-red-50 dark:border-red-800 dark:bg-red-950/30"
+            : day.bankHolidayBlockId
+              ? "border-violet-200 bg-violet-50 dark:border-violet-900 dark:bg-violet-950/30"
+              : "border-black/10 bg-white dark:border-white/10 dark:bg-transparent"
+        }`}
+      >
+        <span className="w-20 shrink-0 font-semibold tabular-nums">
+          {weekdayName} {parseInt(dayNum, 10)}/{month}
+        </span>
+        <span
+          className={`shrink-0 rounded px-1.5 py-0.5 font-semibold ${
+            day.weekLabel === "A"
+              ? "bg-sky-100 text-sky-800 dark:bg-sky-900/50 dark:text-sky-300"
+              : "bg-orange-100 text-orange-800 dark:bg-orange-900/50 dark:text-orange-300"
+          }`}
+        >
+          Week {day.weekLabel}
+        </span>
+        {day.holidayName && (
+          <span className="font-medium text-violet-700 dark:text-violet-300">{day.holidayName}</span>
+        )}
+        <span className="min-w-[70px]">
+          <OnCallSlot day={day} position={position} label={position === "FIRST" ? "1st" : "2nd"} />
+        </span>
+        {day.onLeave.length > 0 && (
+          <div className="flex flex-wrap gap-1">
+            {day.onLeave.map((tag, i) => (
+              <span key={i} className={`rounded px-1 text-[10px] font-medium ${tag.colorClass}`}>
+                {tag.abbrev}
+              </span>
+            ))}
+          </div>
+        )}
+        {hasAlert && (
+          <span className="text-[10px] font-medium text-red-700 dark:text-red-400">
+            {day.alerts.length} alert{day.alerts.length > 1 ? "s" : ""}
+          </span>
+        )}
+      </div>
+    );
+  }
+
   let lastMonth = "";
+
+  const filteredDays = filterId
+    ? weekEntries
+        .flatMap(([, weekDays]) => weekDays)
+        .map((day): { day: DayRow; position: Position } | null => {
+          if (day.first?.consultantId === filterId) return { day, position: "FIRST" };
+          if (day.second?.consultantId === filterId) return { day, position: "SECOND" };
+          return null;
+        })
+        .filter((x): x is { day: DayRow; position: Position } => x !== null)
+        .sort((a, b) => a.day.date.localeCompare(b.day.date))
+    : null;
 
   return (
     <div className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-center gap-2 text-xs">
+        <label htmlFor="consultant-filter" className="font-medium text-black/50 dark:text-white/50">
+          Filter by consultant:
+        </label>
+        <select
+          id="consultant-filter"
+          value={filterId}
+          onChange={(e) => setFilterId(e.target.value)}
+          className="rounded border border-black/15 bg-white px-2 py-1 dark:border-white/20 dark:bg-zinc-900"
+        >
+          <option value="">All consultants</option>
+          {consultants.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.surname}
+            </option>
+          ))}
+        </select>
+        {filterId && (
+          <button onClick={() => setFilterId("")} className="text-blue-600 underline dark:text-blue-400">
+            Clear
+          </button>
+        )}
+      </div>
+
       {selected && (
         <div className="sticky top-0 z-20 flex items-center gap-2 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white shadow">
           <span>
@@ -273,56 +362,70 @@ export function InteractiveCalendar({
         </div>
       )}
 
-      <div className="hidden gap-2 px-1 text-xs font-medium text-black/40 dark:text-white/40 md:grid md:grid-cols-7">
-        {WEEKDAY_HEADERS.map((d) => (
-          <div key={d}>{d}</div>
-        ))}
-      </div>
-
-      {weekEntries.map(([weekStart, weekDays]) => {
-        const label = weekDays[0].weekLabel;
-        const month = monthLabel(weekDays[0].date);
-        const showMonthHeader = month !== lastMonth;
-        lastMonth = month;
-
-        return (
-          <div key={weekStart} className="flex flex-col gap-2">
-            {showMonthHeader && (
-              <h2 className="sticky top-8 z-10 -mx-4 bg-white px-4 py-1 text-sm font-semibold text-black/70 dark:bg-black dark:text-white/70">
-                {month}
-              </h2>
-            )}
-            <div className="flex items-center gap-2 text-xs text-black/50 dark:text-white/50">
-              <span
-                className={`rounded px-1.5 py-0.5 font-semibold ${
-                  label === "A"
-                    ? "bg-sky-100 text-sky-800 dark:bg-sky-900/50 dark:text-sky-300"
-                    : "bg-orange-100 text-orange-800 dark:bg-orange-900/50 dark:text-orange-300"
-                }`}
-              >
-                Week {label}
-              </span>
-              <span>{weekStart}</span>
-            </div>
-            <div className="grid grid-cols-1 gap-2 md:grid-cols-7">
-              {weekDays.map((day) => (
-                // Explicit column placement (1=Mon..7=Sun), only at the md+
-                // breakpoint where the grid actually has 7 columns — the
-                // first/last weeks in range are partial (2027 opens on a
-                // Friday), so placing by array order alone would misalign
-                // those days under the wrong weekday header.
-                <div
-                  key={day.date}
-                  className="md:[grid-column-start:var(--weekday-col)]"
-                  style={{ "--weekday-col": isoWeekday(day.date) + 1 } as React.CSSProperties}
-                >
-                  <DayCell day={day} />
-                </div>
-              ))}
-            </div>
+      {filteredDays ? (
+        <div className="flex flex-col gap-2">
+          <div className="text-xs text-black/50 dark:text-white/50">
+            {filteredDays.length} on-call day{filteredDays.length === 1 ? "" : "s"} for{" "}
+            {consultants.find((c) => c.id === filterId)?.surname}
           </div>
-        );
-      })}
+          {filteredDays.map(({ day, position }) => (
+            <FilteredRow key={day.date} day={day} position={position} />
+          ))}
+        </div>
+      ) : (
+        <>
+          <div className="hidden gap-2 px-1 text-xs font-medium text-black/40 dark:text-white/40 md:grid md:grid-cols-7">
+            {WEEKDAY_HEADERS.map((d) => (
+              <div key={d}>{d}</div>
+            ))}
+          </div>
+
+          {weekEntries.map(([weekStart, weekDays]) => {
+            const label = weekDays[0].weekLabel;
+            const month = monthLabel(weekDays[0].date);
+            const showMonthHeader = month !== lastMonth;
+            lastMonth = month;
+
+            return (
+              <div key={weekStart} className="flex flex-col gap-2">
+                {showMonthHeader && (
+                  <h2 className="sticky top-8 z-10 -mx-4 bg-white px-4 py-1 text-sm font-semibold text-black/70 dark:bg-black dark:text-white/70">
+                    {month}
+                  </h2>
+                )}
+                <div className="flex items-center gap-2 text-xs text-black/50 dark:text-white/50">
+                  <span
+                    className={`rounded px-1.5 py-0.5 font-semibold ${
+                      label === "A"
+                        ? "bg-sky-100 text-sky-800 dark:bg-sky-900/50 dark:text-sky-300"
+                        : "bg-orange-100 text-orange-800 dark:bg-orange-900/50 dark:text-orange-300"
+                    }`}
+                  >
+                    Week {label}
+                  </span>
+                  <span>{weekStart}</span>
+                </div>
+                <div className="grid grid-cols-1 gap-2 md:grid-cols-7">
+                  {weekDays.map((day) => (
+                    // Explicit column placement (1=Mon..7=Sun), only at the md+
+                    // breakpoint where the grid actually has 7 columns — the
+                    // first/last weeks in range are partial (2027 opens on a
+                    // Friday), so placing by array order alone would misalign
+                    // those days under the wrong weekday header.
+                    <div
+                      key={day.date}
+                      className="md:[grid-column-start:var(--weekday-col)]"
+                      style={{ "--weekday-col": isoWeekday(day.date) + 1 } as React.CSSProperties}
+                    >
+                      <DayCell day={day} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </>
+      )}
     </div>
   );
 }
