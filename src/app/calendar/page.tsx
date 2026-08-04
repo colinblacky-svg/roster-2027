@@ -26,6 +26,7 @@ const LEAVE_TAG_COLOR: Record<string, string> = {
   PARENTAL: "bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300",
   MATERNITY: "bg-zinc-200 text-zinc-800 dark:bg-zinc-700 dark:text-zinc-300",
   MEDICAL: "bg-orange-100 text-orange-800 dark:bg-orange-900/50 dark:text-orange-300",
+  ROSTERED: "bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-300",
 };
 
 const LEAVE_TYPE_LABELS: [type: string, label: string][] = [
@@ -34,6 +35,7 @@ const LEAVE_TYPE_LABELS: [type: string, label: string][] = [
   ["PARENTAL", "Parental"],
   ["MATERNITY", "Maternity"],
   ["MEDICAL", "Medical"],
+  ["ROSTERED", "Rostered"],
 ];
 
 function LeaveLegend() {

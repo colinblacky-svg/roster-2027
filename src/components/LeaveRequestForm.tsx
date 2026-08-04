@@ -10,15 +10,33 @@ interface ConsultantOption {
 
 const LEAVE_TYPES = ["ANNUAL", "STUDY", "PARENTAL", "MATERNITY", "MEDICAL"] as const;
 
+// Mislovic works a 0.8 fraction by taking every 5th week off entirely — not
+// annual leave, and not counted against any entitlement/residual/lieu bucket
+// (unlimited). No one else has this pattern, so it's a named exception here
+// rather than a general option, matching how e.g. the Tuesday cardiac-relief
+// route (§7.6) singles out named consultants elsewhere in this codebase.
+const ROSTERED_LEAVE_SURNAMES = ["Mislovic"];
+
 export function LeaveRequestForm({ consultants }: { consultants: ConsultantOption[] }) {
   const router = useRouter();
   const [consultantId, setConsultantId] = useState(consultants[0]?.id ?? "");
   const [startDate, setStartDate] = useState("2027-01-04");
   const [endDate, setEndDate] = useState("2027-01-08");
-  const [leaveType, setLeaveType] = useState<(typeof LEAVE_TYPES)[number]>("ANNUAL");
+  const [leaveType, setLeaveType] = useState<(typeof LEAVE_TYPES)[number] | "ROSTERED">("ANNUAL");
   const [bookingOrCancelling, setBookingOrCancelling] = useState<"BOOK" | "CANCEL">("BOOK");
   const [message, setMessage] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  const selectedConsultant = consultants.find((c) => c.id === consultantId);
+  const canUseRosteredLeave = selectedConsultant ? ROSTERED_LEAVE_SURNAMES.includes(selectedConsultant.surname) : false;
+  const availableLeaveTypes = canUseRosteredLeave ? [...LEAVE_TYPES, "ROSTERED" as const] : LEAVE_TYPES;
+
+  function handleConsultantChange(newConsultantId: string) {
+    setConsultantId(newConsultantId);
+    const newConsultant = consultants.find((c) => c.id === newConsultantId);
+    const stillAllowed = newConsultant && ROSTERED_LEAVE_SURNAMES.includes(newConsultant.surname);
+    if (leaveType === "ROSTERED" && !stillAllowed) setLeaveType("ANNUAL");
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -60,7 +78,7 @@ export function LeaveRequestForm({ consultants }: { consultants: ConsultantOptio
           Consultant
           <select
             value={consultantId}
-            onChange={(e) => setConsultantId(e.target.value)}
+            onChange={(e) => handleConsultantChange(e.target.value)}
             className="rounded border border-black/15 bg-transparent px-2 py-1.5 dark:border-white/20"
           >
             {consultants.map((c) => (
@@ -92,10 +110,10 @@ export function LeaveRequestForm({ consultants }: { consultants: ConsultantOptio
           Leave type
           <select
             value={leaveType}
-            onChange={(e) => setLeaveType(e.target.value as (typeof LEAVE_TYPES)[number])}
+            onChange={(e) => setLeaveType(e.target.value as (typeof LEAVE_TYPES)[number] | "ROSTERED")}
             className="rounded border border-black/15 bg-transparent px-2 py-1.5 dark:border-white/20"
           >
-            {LEAVE_TYPES.map((t) => (
+            {availableLeaveTypes.map((t) => (
               <option key={t} value={t}>
                 {t}
               </option>

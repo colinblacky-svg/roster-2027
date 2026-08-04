@@ -57,6 +57,7 @@ enum LeaveType {
   PARENTAL
   MATERNITY
   MEDICAL
+  ROSTERED
 }
 
 enum BookingOrCancelling {

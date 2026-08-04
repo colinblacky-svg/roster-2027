@@ -7,6 +7,14 @@ import type { CalendarDayData } from "./calendar";
 
 export const RESIDUAL_DEADLINE: ISODate = "2027-04-10";
 
+/** Max people (any leave type except MATERNITY) on leave the same day before
+ * a new overlapping request gets flagged PENDING_APPROVAL instead of
+ * auto-applying (§6.5). Mislovic's ROSTERED leave counts toward this same
+ * pool rather than being excluded like MATERNITY — that's what makes "only 5
+ * other people" fall out of this one shared cap rather than needing its own
+ * rule: his rostered week already occupies one of the six slots. */
+export const LEAVE_CAP = 6;
+
 const WEEKDAY_NAMES = ["MON", "TUE", "WED", "THU", "FRI"] as const;
 
 function isPatternWorkingDay(

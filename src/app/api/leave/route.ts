@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { loadRosterState } from "@/lib/roster-state";
 import { finalizeLeaveApplication } from "@/lib/leave-apply";
 import { logCommand } from "@/lib/commands";
-import { chargeDaysFor } from "@/lib/roster-engine/leave-engine";
+import { chargeDaysFor, LEAVE_CAP } from "@/lib/roster-engine/leave-engine";
 import { eachDay, type ISODate } from "@/lib/roster-engine/date-utils";
 
 function toISO(d: Date): ISODate {
@@ -17,7 +17,7 @@ export async function POST(request: Request) {
     consultantId: string;
     startDate: ISODate;
     endDate: ISODate;
-    leaveType: "ANNUAL" | "STUDY" | "PARENTAL" | "MATERNITY" | "MEDICAL";
+    leaveType: "ANNUAL" | "STUDY" | "PARENTAL" | "MATERNITY" | "MEDICAL" | "ROSTERED";
     bookingOrCancelling: "BOOK" | "CANCEL";
   };
 
@@ -87,7 +87,7 @@ export async function POST(request: Request) {
     for (const date of eachDay(startDate, endDate)) {
       const count =
         activeLeave.filter((r) => toISO(r.startDate) <= date && toISO(r.endDate) >= date).length + 1;
-      if (count > 6) {
+      if (count > LEAVE_CAP) {
         exceedsCap = true;
         break;
       }

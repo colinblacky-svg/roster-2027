@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { isoWeekday, monthLabel, type ISODate } from "@/lib/roster-engine/date-utils";
+import { LEAVE_CAP } from "@/lib/roster-engine/leave-engine";
 
 export interface DayRow {
   date: ISODate;
@@ -205,6 +206,18 @@ export function InteractiveCalendar({
     );
   }
 
+  function isLeaveFull(day: DayRow): boolean {
+    return day.onLeave.filter((tag) => tag.leaveType !== "MATERNITY").length >= LEAVE_CAP;
+  }
+
+  function FullBadge() {
+    return (
+      <span className="rounded bg-black px-1 text-[10px] font-medium text-white dark:bg-white dark:text-black">
+        FULL
+      </span>
+    );
+  }
+
   function DayCell({ day }: { day: DayRow }) {
     const [, month, dayNum] = day.date.split("-");
     const isWeekend = isoWeekday(day.date) >= 5;
@@ -250,6 +263,7 @@ export function InteractiveCalendar({
                 {tag.abbrev}
               </span>
             ))}
+            {isLeaveFull(day) && <FullBadge />}
           </div>
         )}
         {hasAlert && (
@@ -306,6 +320,7 @@ export function InteractiveCalendar({
                 {tag.abbrev}
               </span>
             ))}
+            {isLeaveFull(day) && <FullBadge />}
           </div>
         )}
         {hasAlert && (
